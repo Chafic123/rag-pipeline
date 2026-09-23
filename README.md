@@ -17,7 +17,8 @@ over documents is the next stage.
 - Python, FastAPI, Uvicorn
 - OpenAI Python SDK (`gpt-4o-mini`)
 - Pydantic for request and response validation
-- NumPy for vector math (embeddings experiments)
+- NumPy for vector math
+- Qdrant for vector storage and similarity search
 
 ## Project structure
 
@@ -26,6 +27,9 @@ main.py            # app entry point, wires the routers together
 models.py          # Pydantic schemas (Query, Answer)
 llm.py             # LLM calls (ask, ask_structured)
 embeddings_demo.py # experiment: embeddings + cosine similarity
+ingest.py          # split a document into chunks
+rag_store.py       # full RAG: chunk -> embed -> store -> retrieve -> answer
+docs/sample.txt    # example document to answer questions from
 routers/
   health.py        # GET /health
   ask.py           # POST /ask, POST /ask-structured
@@ -70,10 +74,11 @@ Returns:
 
 ## Roadmap
 
-- [ ] Document ingestion and chunking
+- [x] Document ingestion and chunking (`ingest.py`)
 - [x] Explore embeddings and cosine similarity (`embeddings_demo.py`)
-- [ ] Vector store and semantic retrieval
-- [ ] A RAG endpoint that answers grounded in retrieved documents
+- [x] Vector store and semantic retrieval (Qdrant)
+- [x] RAG answer as a script: retrieve, augment, generate (`rag_store.py`)
+- [ ] Expose RAG through the API endpoint
 - [ ] Evaluation harness and metrics
 - [ ] Observability: logging, cost, and latency
 

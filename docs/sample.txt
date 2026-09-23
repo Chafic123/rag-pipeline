@@ -1,0 +1,15 @@
+What is an API?
+
+An API, or application programming interface, is a contract that lets two pieces of software talk to each other. Instead of exposing its internal code, a service offers a set of endpoints that accept requests and return responses, usually as JSON. Backend engineers spend much of their time designing and building these interfaces so that clients, other services, and now AI systems can use them reliably.
+
+What is a backend?
+
+The backend is the part of an application the user never sees directly. It handles data storage, business logic, authentication, and integration with other systems. Reliability matters most here: a backend must stay fast and correct under load, which is why practices like load testing, monitoring, and clean API design are so important.
+
+What is retrieval-augmented generation?
+
+Retrieval-augmented generation, or RAG, is a technique for making a language model answer questions using your own documents. First the documents are split into chunks and turned into embeddings. When a question arrives, the system retrieves the chunks most similar to it and passes them to the model as context, so the answer is grounded in real sources instead of guessed.
+
+Why combine backend engineering with AI?
+
+Most of the work in a production AI system is not the model itself. It is the retrieval, the APIs, the evaluation, and the monitoring around it. These are backend problems, which is why a backend engineer moving into AI has a strong advantage: the hardest parts of shipping AI are the parts they already know.
