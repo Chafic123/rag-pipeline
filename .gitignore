@@ -1,5 +1,16 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+
+# Secrets
 .env
-.DS_Storeqdrant_data/
+
+# OS
+.DS_Store
+
+# Qdrant local vector store (generated data, not source)
+qdrant_data/
+
+# Backups / scratch
+*.bak
