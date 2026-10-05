@@ -1,0 +1,22 @@
+[
+  {"question": "What does a 404 status code mean?", "expected_source": "apis.txt"},
+  {"question": "Which HTTP method is used to create a resource?", "expected_source": "apis.txt"},
+  {"question": "What is used to document a REST API?", "expected_source": "apis.txt"},
+  {"question": "What is p99 latency?", "expected_source": "backend.txt"},
+  {"question": "What does a database connection pool do?", "expected_source": "backend.txt"},
+  {"question": "What is the difference between latency and throughput?", "expected_source": "backend.txt"},
+  {"question": "What happens if chunks are too large?", "expected_source": "rag.txt"},
+  {"question": "Why is there overlap between chunks?", "expected_source": "rag.txt"},
+  {"question": "What does cosine similarity measure?", "expected_source": "vector_search.txt"},
+  {"question": "What does HNSW stand for?", "expected_source": "vector_search.txt"},
+  {"question": "Why is brute-force vector search too slow at scale?", "expected_source": "vector_search.txt"},
+  {"question": "What does hit-rate at k measure?", "expected_source": "evaluation.txt"},
+  {"question": "What is faithfulness in RAG evaluation?", "expected_source": "evaluation.txt"},
+  {"question": "What is an LLM-as-judge?", "expected_source": "evaluation.txt"},
+  {"question": "What is the difference between a bi-encoder and a cross-encoder?", "expected_source": "reranking.txt"},
+  {"question": "What is hybrid search?", "expected_source": "reranking.txt"},
+  {"question": "Why can a cross-encoder not run over the whole database?", "expected_source": "reranking.txt"},
+  {"question": "What does a Docker container bundle?", "expected_source": "deployment.txt"},
+  {"question": "What should you monitor for an AI service?", "expected_source": "deployment.txt"},
+  {"question": "What is a health check endpoint for?", "expected_source": "deployment.txt"}
+]

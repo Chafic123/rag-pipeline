@@ -18,16 +18,18 @@ def chunk_text(text, chunk_size=500, overlap=100):
     return chunks
 
 
-# --- run the chunker on a real document and show the result ---
-with open("docs/sample.txt", encoding="utf-8") as f:
-    document = f.read()                # read the whole file into one string
+# --- demo: runs ONLY when you execute `python ingest.py` directly, ---
+# --- NOT when another module does `from ingest import chunk_text`.   ---
+if __name__ == "__main__":
+    with open("docs/_sample.txt", encoding="utf-8") as f:
+        document = f.read()            # read the whole file into one string
 
-chunks = chunk_text(document)          # split it into chunks
+    chunks = chunk_text(document)      # split it into chunks
 
-print(f"Document length: {len(document)} characters")
-print(f"Number of chunks: {len(chunks)}\n")
+    print(f"Document length: {len(document)} characters")
+    print(f"Number of chunks: {len(chunks)}\n")
 
-for i, chunk in enumerate(chunks):     # print a short preview of each chunk
-    print(f"--- chunk {i} ({len(chunk)} chars) ---")
-    print(chunk.strip()[:200], "...")
-    print()
+    for i, chunk in enumerate(chunks): # print a short preview of each chunk
+        print(f"--- chunk {i} ({len(chunk)} chars) ---")
+        print(chunk.strip()[:200], "...")
+        print()

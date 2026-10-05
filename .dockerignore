@@ -1,0 +1,10 @@
+# Keep the build context small and secrets OUT of the image.
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+qdrant_data/
+.env
+*.bak
+.DS_Store
