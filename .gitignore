@@ -14,3 +14,10 @@ qdrant_data/
 
 # Backups / scratch
 *.bak
+
+# Files the Claude app saves into this folder
+Claude outputs/
+
+# Test cache and local evaluation runs
+.pytest_cache/
+evals/results/

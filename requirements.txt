@@ -11,8 +11,5 @@ openai==3.14.1
 # Vector database (retrieval)
 qdrant-client==1.19.1
 
-# Numerical ops (cosine similarity demo)
-numpy==2.5.3
-
 # Load the OPENAI_API_KEY from .env
 python-dotenv==1.2.3

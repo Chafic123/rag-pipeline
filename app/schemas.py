@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+"""Request and response shapes for the HTTP API, validated by Pydantic."""
+from pydantic import BaseModel, Field
 
 
-class Query(BaseModel):
-    prompt: str
+class AskRequest(BaseModel):
+    prompt: str = Field(min_length=1, description="The question to answer from the documents.")
 
 
-class Answer(BaseModel):
-    topic: str
-    summary: str
-    confidence: float
+class AskResponse(BaseModel):
+    answer: str
+    sources: list[str] = Field(default_factory=list, description="Documents the answer was based on.")

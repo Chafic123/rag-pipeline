@@ -1,134 +1,84 @@
-# rag_store.py
-# Full RAG, refactored so the pieces are reusable and safe to import.
-#
-# THE FLOW when answering one question (answer()):
-#   1. Question comes in.
-#   2. Embed the question into a vector.
-#   3. Retrieve the most similar chunks  -> this is the CONTEXT.
-#   4. Augment: prompt = instructions + context + question.
-#   5. Generate: send the prompt to the LLM.
-#   6. Return the grounded answer.
-#
-# build_index() runs the ingestion pipeline ONCE: load -> chunk -> embed -> store.
+"""Vector store: embeddings, indexing and retrieval with Qdrant (local mode).
 
-import os
+    build_index()   load -> chunk -> embed -> store, once at startup
+    retrieve()      embed the question -> nearest chunks (HNSW search)
+"""
+from functools import lru_cache
 
-from openai import OpenAI
-from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, HnswConfigDiff, SearchParams
+from qdrant_client.models import (
+    Distance,
+    HnswConfigDiff,
+    PointStruct,
+    SearchParams,
+    VectorParams,
+)
 
-from pathlib import Path
-
-from ingest import chunk_text
-
-load_dotenv()
-openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-qdrant = QdrantClient(path="qdrant_data")   # local vector DB, shared by both functions
-
-EMBED_MODEL = "text-embedding-3-small"
-COLLECTION = "documents"
+from app.config import settings
+from app.llm import get_openai
+from app.rag.ingest import load_chunks
 
 
-def embed(texts):
-    """Turn a list of texts into a list of vectors (one vector per text)."""
-    response = openai_client.embeddings.create(model=EMBED_MODEL, input=texts)
+@lru_cache(maxsize=1)
+def get_qdrant() -> QdrantClient:
+    """Open the local Qdrant store on first use.
+    Local mode locks the folder to ONE process, so stop the API before running evals."""
+    return QdrantClient(path=str(settings.qdrant_path))
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    """Turn a list of texts into a list of vectors, one vector per text."""
+    response = get_openai().embeddings.create(model=settings.embed_model, input=texts)
     return [item.embedding for item in response.data]
 
 
-def build_index(docs_dir="docs"):
-    """Ingestion pipeline: load EVERY document in docs_dir -> chunk -> embed -> store.
-    Each chunk remembers which file it came from (payload 'source'), so evaluation
-    can later check whether retrieval found the right document.
-    Files whose name starts with '_' are ignored."""
-    # load + chunk every document, remembering the source file for each chunk
-    chunks, sources = [], []
-    paths = sorted(list(Path(docs_dir).glob("*.txt")) + list(Path(docs_dir).glob("*.md")))
-    for path in paths:
-        if path.name.startswith("_"):      # underscore-prefixed files are skipped
-            continue
-        text = path.read_text(encoding="utf-8")
-        for chunk in chunk_text(text):
-            chunks.append(chunk)
-            sources.append(path.name)
-
-    # embed all chunks in a single API call
+def build_index() -> int:
+    """Ingestion pipeline: load every document -> chunk -> embed -> store.
+    Each point keeps its text and source filename in the payload, so evaluation
+    can check which document a retrieved chunk came from. Returns the chunk count."""
+    chunks, sources = load_chunks(settings.docs_dir, settings.chunk_size, settings.chunk_overlap)
+    if not chunks:
+        raise RuntimeError(f"No documents found in {settings.docs_dir}")
     vectors = embed(chunks)
 
-    # store: (re)create the collection, then write the points
-    if qdrant.collection_exists(COLLECTION):
-        qdrant.delete_collection(COLLECTION)
+    qdrant = get_qdrant()
+    if qdrant.collection_exists(settings.collection):
+        qdrant.delete_collection(settings.collection)
     qdrant.create_collection(
-        collection_name=COLLECTION,
+        collection_name=settings.collection,
         vectors_config=VectorParams(
             size=len(vectors[0]),          # must match the embedding size (1536)
             distance=Distance.COSINE,      # rank by cosine similarity
         ),
-        # HNSW is the graph index Qdrant uses for fast approximate nearest-neighbour
-        # search instead of comparing the query against every vector (O(n)).
-        # These are the BUILD-TIME knobs (they shape the graph, once, at indexing):
+        # HNSW: the graph index for fast approximate nearest-neighbour search,
+        # instead of comparing the query against every vector (O(n)).
+        # BUILD-TIME knobs, they shape the graph once at indexing:
         hnsw_config=HnswConfigDiff(
             m=16,             # edges per node: more edges = better recall, more memory
-            ef_construct=100, # effort while BUILDING the graph: higher = better graph, slower to build
+            ef_construct=100, # effort while building: higher = better graph, slower build
         ),
     )
-    # each point stores the chunk text AND its source filename
-    points = [
-        PointStruct(id=i, vector=vectors[i],
-                    payload={"text": chunks[i], "source": sources[i]})
-        for i in range(len(chunks))
-    ]
-    qdrant.upsert(collection_name=COLLECTION, points=points)
-    return len(points)                     # how many chunks were stored
+    qdrant.upsert(
+        collection_name=settings.collection,
+        points=[
+            PointStruct(id=i, vector=vector, payload={"text": chunk, "source": source})
+            for i, (vector, chunk, source) in enumerate(zip(vectors, chunks, sources))
+        ],
+    )
+    return len(chunks)
 
 
-def retrieve(question, k=3):
-    """STAGE 1 retrieval: embed the question and return the k most similar chunks.
-    Each returned point carries payload['text'] and payload['source'], plus a score.
-    The reranker (stage 2) will be layered on top of this later."""
+def retrieve(question: str, k: int | None = None):
+    """Embed the question and return the k most similar chunks, best first.
+    Each point carries payload['text'], payload['source'] and a similarity score.
+    A reranker (stage 2) will be layered on top of this later."""
     query_vector = embed([question])[0]
-    results = qdrant.query_points(
-        collection_name=COLLECTION,
+    return get_qdrant().query_points(
+        collection_name=settings.collection,
         query=query_vector,
-        limit=k,
+        limit=k or settings.top_k,
         with_payload=True,
-        # QUERY-TIME knob: how many candidates to explore while walking the graph.
-        # Higher hnsw_ef = better recall but slower. This is the recall-vs-speed dial.
+        # QUERY-TIME knob: candidates explored while walking the graph.
+        # Higher hnsw_ef = better recall but slower: the recall-vs-speed dial.
         search_params=SearchParams(hnsw_ef=64),
     ).points
-    return results
-
-
-def answer(question, k=3):
-    """Full RAG for one question: Retrieve -> Augment -> Generate."""
-    # STEP 2 + 3 - retrieve the k chunks most similar to the question
-    results = retrieve(question, k=k)
-    context = "\n\n".join(point.payload["text"] for point in results)
-
-    # STEP 4 - augment: build the prompt with the retrieved context
-    prompt = (
-        "Use ONLY the context below to answer the question. "
-        "If the answer is not in the context, say you don't know.\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {question}"
-    )
-
-    # STEP 5 - generate the answer from the augmented prompt
-    response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
-    # STEP 6 - return the grounded answer
-    return response.choices[0].message.content
-
-
-# This block runs ONLY when you run `python rag_store.py` directly.
-# When another file imports this module (like the API will), it does NOT run,
-# so importing will not rebuild the index or print anything.
-if __name__ == "__main__":
-    count = build_index()
-    print(f"Stored {count} chunks in the '{COLLECTION}' collection.\n")
-
-    question = "How does retrieval augmented generation work?"
-    print(f"Question: {question}\n")
-    print(answer(question))

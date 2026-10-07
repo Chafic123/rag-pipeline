@@ -28,4 +28,5 @@ EXPOSE 8000
 #    --host 0.0.0.0 is REQUIRED inside a container: 127.0.0.1 would only be
 #    reachable from within the container itself. 0.0.0.0 lets the port mapping
 #    (docker run -p) reach it from your Mac.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+#    app.main:app = the `app` object inside the app/main.py module.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

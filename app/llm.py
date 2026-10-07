@@ -1,34 +1,18 @@
-import os
+"""One shared OpenAI client for the whole project.
+
+Created lazily on first use, so importing the app (for example in tests) does
+not need an API key, and every module reuses one client and its connection
+pool instead of each file creating its own.
+"""
+from functools import lru_cache
 
 from openai import OpenAI
-from dotenv import load_dotenv
 
-from models import Answer
-
-load_dotenv()
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+from app.config import settings
 
 
-def ask(prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.choices[0].message.content
-
-# Structured Outputs
-def ask_structured(prompt: str) -> Answer:
-    completion = client.chat.completions.parse(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system",
-             "content": "Extract the topic, a one-sentence summary, "
-                        "and your confidence from 0 to 1."},
-            {"role": "user", "content": prompt},
-        ],
-        response_format=Answer,
-    )
-    message = completion.choices[0].message
-    if message.refusal:
-        raise ValueError(f"Model refused: {message.refusal}")
-    return message.parsed
+@lru_cache(maxsize=1)
+def get_openai() -> OpenAI:
+    if not settings.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env (see .env.example).")
+    return OpenAI(api_key=settings.openai_api_key)

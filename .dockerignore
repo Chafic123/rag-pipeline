@@ -8,3 +8,13 @@ qdrant_data/
 .env
 *.bak
 .DS_Store
+
+# Not needed at runtime: tests, evals, dev tooling
+tests/
+evals/
+.pytest_cache/
+requirements-dev.txt
+pytest.ini
+Makefile
+.env.example
+Claude outputs/

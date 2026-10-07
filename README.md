@@ -1,38 +1,54 @@
 # RAG Doc Assistant
 
-A document question-answering service built with FastAPI, on the way to becoming a
-retrieval-augmented (RAG) assistant. The service foundation is in place; retrieval
-over documents is the next stage.
+A retrieval-augmented generation (RAG) service that answers questions from a set of
+documents, cites the sources it used, and measures its own quality. Built with FastAPI,
+OpenAI and Qdrant, packaged with Docker.
 
-## What it does (current)
+## What it does
 
-- `GET /health` — liveness check.
-- `POST /ask` — sends a question to an LLM and returns the plain-text answer.
-- `POST /ask-structured` — returns a schema-validated JSON answer (`topic`,
-  `summary`, `confidence`) using OpenAI Structured Outputs, so the shape is
-  guaranteed, not just hoped for.
+- `POST /ask-rag` answers a question using only the indexed documents and returns the
+  answer plus the source documents it was based on. If the answer is not in the
+  documents, it says it does not know.
+- `GET /health` is a liveness check.
 
-## Tech stack
+On startup the service reads every document in `data/docs/`, splits it into overlapping
+chunks, embeds them, and stores them in a local Qdrant index (HNSW). Each question is
+embedded, matched against the index, and answered by the LLM from the retrieved chunks only.
 
-- Python, FastAPI, Uvicorn
-- OpenAI Python SDK (`gpt-4o-mini`)
-- Pydantic for request and response validation
-- NumPy for vector math
-- Qdrant for vector storage and similarity search
+## Evaluation
+
+Quality is measured, not guessed. `evals/` holds a ground-truth set of 20 questions, each
+with the expected source document and a reference answer.
+
+- **Retrieval:** hit@1 and hit@k, did the right document come back?
+- **Generation:** faithfulness, answer relevance and correctness, scored 1 to 5 by an
+  LLM-as-judge (a stronger model than the generator, one rubric per metric).
+
+Every run is saved to `evals/results/`, so a change such as adding a reranker can be
+compared against a baseline.
 
 ## Project structure
 
 ```
-main.py            # app entry point, wires the routers together
-models.py          # Pydantic schemas (Query, Answer)
-llm.py             # LLM calls (ask, ask_structured)
-embeddings_demo.py # experiment: embeddings + cosine similarity
-ingest.py          # split a document into chunks
-rag_store.py       # full RAG: chunk -> embed -> store -> retrieve -> answer
-docs/sample.txt    # example document to answer questions from
-routers/
-  health.py        # GET /health
-  ask.py           # POST /ask, POST /ask-structured
+app/                    the service
+  main.py               FastAPI app, wires the routers, builds the index at startup
+  config.py             all settings in one place, read from the environment
+  llm.py                one shared OpenAI client
+  schemas.py            request and response models
+  api/routes/           HTTP layer: health.py, rag.py
+  rag/
+    ingest.py           load documents and split them into chunks
+    store.py            embeddings, Qdrant index (HNSW), retrieval
+    pipeline.py         retrieve -> augment -> generate
+evals/                  quality measurement (not shipped in the image)
+  eval_set.json         ground truth: questions, expected sources, reference answers
+  judge.py              LLM-as-judge
+  run_evals.py          runs the evaluation and saves results
+tests/                  fast unit tests, no API key needed
+data/docs/              the document corpus
+Dockerfile              container image
+Makefile                common commands
+.env.example            required environment variables
 ```
 
 ## Setup
@@ -40,49 +56,55 @@ routers/
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+make install
+cp .env.example .env      # then put your OpenAI API key in .env
 ```
 
-Create a `.env` file in the project root with your API key (this file is gitignored
-and never committed):
+## Commands
 
-```
-OPENAI_API_KEY=sk-your-key
-```
-
-## Run
-
-```bash
-uvicorn main:app --reload
-```
-
-Then open the interactive API docs at http://127.0.0.1:8000/docs
+| Command | What it does |
+|---|---|
+| `make run` | start the API, docs at http://127.0.0.1:8000/docs |
+| `make test` | run the unit tests |
+| `make eval` | full evaluation (stop the API first: Qdrant local mode allows one process) |
+| `make eval-quick` | full evaluation on the first 3 questions |
+| `make eval-retrieval` | retrieval-only evaluation, almost free |
+| `make docker-build` / `make docker-run` | build and run the container |
 
 ## Example
 
 ```bash
-curl -X POST http://127.0.0.1:8000/ask-structured \
+curl -X POST http://127.0.0.1:8000/ask-rag \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Explain what an API key is."}'
+  -d '{"prompt": "What does HNSW stand for?"}'
 ```
 
-Returns:
+Response shape:
 
 ```json
-{ "topic": "API keys", "summary": "...", "confidence": 0.9 }
+{ "answer": "...", "sources": ["vector_search.txt"] }
 ```
+
+## Tech stack
+
+Python, FastAPI, Uvicorn, Pydantic, OpenAI (`text-embedding-3-small` for embeddings,
+`gpt-4o-mini` for answers, `gpt-4o` as judge), Qdrant, Docker, pytest.
 
 ## Roadmap
 
-- [x] Document ingestion and chunking (`ingest.py`)
-- [x] Explore embeddings and cosine similarity (`embeddings_demo.py`)
-- [x] Vector store and semantic retrieval (Qdrant)
-- [x] RAG answer as a script: retrieve, augment, generate (`rag_store.py`)
-- [ ] Expose RAG through the API endpoint
-- [ ] Evaluation harness and metrics
-- [ ] Observability: logging, cost, and latency
+- [x] Ingestion and chunking with overlap
+- [x] Vector store and semantic retrieval (Qdrant, explicit HNSW parameters)
+- [x] RAG endpoint with grounded answers and source citations
+- [x] Docker image
+- [x] Evaluation harness: retrieval hit-rate and LLM-as-judge
+- [x] Company-style project layout, central config, unit tests
+- [ ] Baseline evaluation numbers in this README
+- [ ] RAGAS metrics and Promptfoo regression tests
+- [ ] Reranking (cross-encoder) and hybrid search (BM25 + vector)
+- [ ] CI: tests on every push
+- [ ] Observability: tracing, cost and latency
 
 ## Status
 
-Early stage, and actively built. Part of a personal project to combine backend
-engineering with AI/ML systems, working toward a production-grade RAG service.
+Actively built, as part of a project combining backend engineering with AI systems,
+working toward a production-grade RAG service.

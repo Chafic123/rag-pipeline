@@ -1,22 +1,23 @@
+"""FastAPI entry point: creates the app, wires the routers, builds the index at startup.
+
+Run locally:  make run   (same as: uvicorn app.main:app --reload)
+"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from routers import health, ask, rag
-from rag_store import build_index
+from app.api.routes import health, rag
+from app.rag.store import build_index
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # STARTUP: runs ONCE when the server boots.
-    # Build the vector index so the RAG endpoint has documents to search.
+    # STARTUP: runs once when the server boots, not on every request.
     build_index()
     yield
-    # (anything after yield would run on SHUTDOWN; we do not need any)
+    # SHUTDOWN: nothing to clean up yet.
 
 
 app = FastAPI(title="RAG Doc Assistant", lifespan=lifespan)
-
 app.include_router(health.router)
-app.include_router(ask.router)
 app.include_router(rag.router)
