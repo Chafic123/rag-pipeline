@@ -1,7 +1,9 @@
 """Vector store: embeddings, indexing and retrieval with Qdrant (local mode).
 
     build_index()   load -> chunk -> embed -> store, once at startup
-    retrieve()      embed the question -> nearest chunks (HNSW search)
+    embed_query()   question -> vector (+ tokens used, for cost tracking)
+    search()        vector -> nearest chunks (HNSW search)
+    retrieve()      embed_query + search in one call
 """
 from functools import lru_cache
 
@@ -26,10 +28,11 @@ def get_qdrant() -> QdrantClient:
     return QdrantClient(path=str(settings.qdrant_path))
 
 
-def embed(texts: list[str]) -> list[list[float]]:
-    """Turn a list of texts into a list of vectors, one vector per text."""
+def embed(texts: list[str]) -> tuple[list[list[float]], int]:
+    """Turn a list of texts into a list of vectors, one vector per text.
+    Also returns the tokens OpenAI billed for the call (response.usage)."""
     response = get_openai().embeddings.create(model=settings.embed_model, input=texts)
-    return [item.embedding for item in response.data]
+    return [item.embedding for item in response.data], response.usage.total_tokens
 
 
 def build_index() -> int:
@@ -39,7 +42,7 @@ def build_index() -> int:
     chunks, sources = load_chunks(settings.docs_dir, settings.chunk_size, settings.chunk_overlap)
     if not chunks:
         raise RuntimeError(f"No documents found in {settings.docs_dir}")
-    vectors = embed(chunks)
+    vectors, _ = embed(chunks)
 
     qdrant = get_qdrant()
     if qdrant.collection_exists(settings.collection):
@@ -68,11 +71,16 @@ def build_index() -> int:
     return len(chunks)
 
 
-def retrieve(question: str, k: int | None = None):
-    """Embed the question and return the k most similar chunks, best first.
+def embed_query(question: str) -> tuple[list[float], int]:
+    """Embed one question. Returns (vector, tokens used)."""
+    vectors, tokens = embed([question])
+    return vectors[0], tokens
+
+
+def search(query_vector: list[float], k: int | None = None):
+    """Return the k chunks most similar to the vector, best first.
     Each point carries payload['text'], payload['source'] and a similarity score.
     A reranker (stage 2) will be layered on top of this later."""
-    query_vector = embed([question])[0]
     return get_qdrant().query_points(
         collection_name=settings.collection,
         query=query_vector,
@@ -82,3 +90,9 @@ def retrieve(question: str, k: int | None = None):
         # Higher hnsw_ef = better recall but slower: the recall-vs-speed dial.
         search_params=SearchParams(hnsw_ef=64),
     ).points
+
+
+def retrieve(question: str, k: int | None = None):
+    """Embed the question and return the k most similar chunks, best first."""
+    query_vector, _ = embed_query(question)
+    return search(query_vector, k=k)

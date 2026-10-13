@@ -1,0 +1,26 @@
+# Runs on every push and pull request. Needs no API key: unit tests use fakes,
+# and the secret scan makes sure no key ever reaches the repository.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"        # same as the Dockerfile
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Unit tests and secret scan
+        run: make test

@@ -16,5 +16,7 @@ evals/
 requirements-dev.txt
 pytest.ini
 Makefile
+LICENSE
+.github/
 .env.example
 Claude outputs/

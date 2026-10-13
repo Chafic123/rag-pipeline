@@ -20,7 +20,16 @@
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.costs import cost_usd
 from app.llm import get_openai
+
+# Running token count of every judge call in this process, so run_evals can report
+# what the evaluation itself cost, separately from what serving the answers cost.
+token_totals = {"calls": 0, "input": 0, "output": 0}
+
+
+def judge_cost_usd() -> float:
+    return cost_usd(settings.judge_model, token_totals["input"], token_totals["output"])
 
 # The judge model (settings.judge_model, gpt-4o by default) is stronger than the
 # generator (settings.generation_model, gpt-4o-mini).
@@ -43,6 +52,10 @@ def _grade(system_prompt: str, user_prompt: str) -> Verdict:
         ],
         response_format=Verdict,
     )
+    token_totals["calls"] += 1
+    token_totals["input"] += completion.usage.prompt_tokens
+    token_totals["output"] += completion.usage.completion_tokens
+
     message = completion.choices[0].message
     if message.refusal:
         raise ValueError(f"Judge refused: {message.refusal}")

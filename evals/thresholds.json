@@ -1,0 +1,9 @@
+{
+  "hit_rate@1":      {"min": 0.70},
+  "hit_rate@k":      {"min": 0.90},
+  "faithfulness":    {"min": 0.80},
+  "relevance":       {"min": 0.75},
+  "correctness":     {"min": 0.70},
+  "p95_latency_s":   {"max": 5.0},
+  "cost_per_1k_usd": {"max": 0.50}
+}

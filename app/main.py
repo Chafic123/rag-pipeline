@@ -2,12 +2,16 @@
 
 Run locally:  make run   (same as: uvicorn app.main:app --reload)
 """
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.api.routes import health, rag
 from app.rag.store import build_index
+
+# Show INFO logs from our own modules (uvicorn configures only its own loggers)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 @asynccontextmanager
